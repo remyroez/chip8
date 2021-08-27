@@ -8,10 +8,36 @@
 #include "libretro.h"
 #include "chip8.hpp"
 
-static uint32_t* frame_buf;
-static retro_log_printf_t log_cb;
+namespace {
 
-static void fallback_log(enum retro_log_level level, const char* fmt, ...)
+class emu {
+public:
+    using cpu = chip8::cpu;
+    using video = chip8::video<>;
+    using audio = chip8::audio;
+
+    static constexpr double fps = 60.f;
+    static constexpr double sample_rate = 0.f;
+
+    auto framebuffer() { return _video.framebuffer(); }
+
+private:
+    cpu _cpu;
+    video _video;
+    audio _audio;
+};
+
+emu s_emu;
+
+retro_video_refresh_t video_cb;
+retro_audio_sample_t audio_cb;
+retro_audio_sample_batch_t audio_batch_cb;
+retro_environment_t environ_cb;
+retro_input_poll_t input_poll_cb;
+retro_input_state_t input_state_cb;
+retro_log_printf_t log_cb;
+
+void fallback_log(enum retro_log_level level, const char* fmt, ...)
 {
     (void)level;
     va_list va;
@@ -20,15 +46,14 @@ static void fallback_log(enum retro_log_level level, const char* fmt, ...)
     va_end(va);
 }
 
+} // namespace
+
 void retro_init(void)
 {
-    frame_buf = reinterpret_cast<uint32_t*>(calloc(320 * 240, sizeof(uint32_t)));
 }
 
 void retro_deinit(void)
 {
-    free(frame_buf);
-    frame_buf = NULL;
 }
 
 unsigned retro_api_version(void)
@@ -44,31 +69,23 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 void retro_get_system_info(struct retro_system_info* info)
 {
     memset(info, 0, sizeof(*info));
-    info->library_name = "TestCore";
+    info->library_name = "chip8";
     info->library_version = "v1";
     info->need_fullpath = false;
-    info->valid_extensions = NULL; // Anything is fine, we don't care.
+    info->valid_extensions = nullptr; // Anything is fine, we don't care.
 }
 
-static retro_video_refresh_t video_cb;
-static retro_audio_sample_t audio_cb;
-static retro_audio_sample_batch_t audio_batch_cb;
-static retro_environment_t environ_cb;
-static retro_input_poll_t input_poll_cb;
-static retro_input_state_t input_state_cb;
 
 void retro_get_system_av_info(struct retro_system_av_info* info)
 {
-    float aspect = 4.0f / 3.0f;
+    info->timing.fps = emu::fps;
+    info->timing.sample_rate = emu::sample_rate;
 
-    info->timing.fps = 60.0;
-    info->timing.sample_rate = 0.0;
-
-    info->geometry.base_width = 320;
-    info->geometry.base_height = 240;
-    info->geometry.max_width = 320;
-    info->geometry.max_height = 240;
-    info->geometry.aspect_ratio = aspect;
+    info->geometry.base_width = emu::video::width;
+    info->geometry.base_height = emu::video::height;
+    info->geometry.max_width = emu::video::width;
+    info->geometry.max_height = emu::video::height;
+    info->geometry.aspect_ratio = emu::video::aspect_ratio;
 }
 
 void retro_set_environment(retro_environment_t cb)
@@ -82,7 +99,7 @@ void retro_set_environment(retro_environment_t cb)
     if (cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &logging))
         log_cb = logging.log;
     else
-        log_cb = fallback_log;
+        log_cb = ::fallback_log;
 }
 
 void retro_set_audio_sample(retro_audio_sample_t cb)
@@ -132,16 +149,16 @@ static void update_input(void)
 
 static void render_checkered(void)
 {
-    uint32_t* buf = frame_buf;
-    unsigned stride = 320;
+    uint32_t* buf = s_emu.framebuffer();
+    unsigned stride = emu::video::width;
     uint32_t color_r = 0xff << 16;
     uint32_t color_g = 0xff << 8;
     uint32_t* line = buf;
 
-    for (unsigned y = 0; y < 240; y++, line += stride)
+    for (unsigned y = 0; y < emu::video::height; y++, line += stride)
     {
         unsigned index_y = ((y - y_coord) >> 4) & 1;
-        for (unsigned x = 0; x < 320; x++)
+        for (unsigned x = 0; x < emu::video::width; x++)
         {
             unsigned index_x = ((x - x_coord) >> 4) & 1;
             line[x] = (index_y ^ index_x) ? color_r : color_g;
@@ -152,7 +169,7 @@ static void render_checkered(void)
         for (unsigned x = mouse_rel_x - 5; x <= mouse_rel_x + 5; x++)
             buf[y * stride + x] = 0xff;
 
-    video_cb(buf, 320, 240, stride << 2);
+    video_cb(buf, emu::video::width, emu::video::height, stride << 2);
 }
 
 static void check_variables(void)
@@ -177,7 +194,7 @@ void retro_run(void)
 
 bool retro_load_game(const struct retro_game_info* info)
 {
-    enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+    auto fmt = RETRO_PIXEL_FORMAT_XRGB8888;
     if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
     {
         log_cb(RETRO_LOG_INFO, "XRGB8888 is not supported.\n");
