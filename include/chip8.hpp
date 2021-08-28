@@ -91,6 +91,7 @@ public:
 
 	constexpr auto program_counter() const { return _program_counter; }
 	constexpr void program_counter(program_counter_t pc) { _program_counter = pc; }
+	constexpr void increment_program_counter(program_counter_t n = 0) { program_counter(program_counter() + increment_pc * n); }
 
 	constexpr auto stack() const { return _stack[_stack_pointer]; }
 	constexpr auto stack_pointer() const { return _stack_pointer; }
@@ -127,7 +128,7 @@ public:
 		update_opcode();
 		dispatch();
 
-		_program_counter += increment_pc;
+		increment_program_counter();
 		if (_delay_timer > 0) --_delay_timer;
 		if (_sound_timer > 0) --_sound_timer;
 	}
@@ -226,31 +227,65 @@ public:
 		pop_stack();
 	}
 
+	// JP addr
 	void op_1nnn() {
+		// Jump to location nnn.
+		const auto addr = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
+		program_counter(addr);
 	}
 
+	// CALL addr
 	void op_2nnn() {
-
+		// Call subroutine at nnn.
+		const auto addr = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
+		push_stack();
+		program_counter(addr);
 	}
 
+	// SE Vx, byte
 	void op_3xkk() {
-
+		// Skip next instruction if Vx = kk.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
+		if (v(x) == kk) {
+			increment_program_counter();
+		}
 	}
 
+	// SNE Vx, byte
 	void op_4xkk() {
-
+		// Skip next instruction if Vx != kk.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
+		if (v(x) != kk) {
+			increment_program_counter();
+		}
 	}
 
+	// SE Vx, Vy
 	void op_5xy0() {
-
+		// Skip next instruction if Vx = Vy.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		if (v(x) == v(y)) {
+			increment_program_counter();
+		}
 	}
 
+	// LD Vx, byte
 	void op_6xkk() {
-
+		// Set Vx = kk.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
+		v(x, kk);
 	}
 
+	// ADD Vx, byte
 	void op_7xkk() {
-
+		// Set Vx = Vx + kk.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
+		v(x, v(x) + kk);
 	}
 
 	void op_8xy0() {
