@@ -3,6 +3,7 @@
 #include <array>
 #include <vector>
 #include <limits>
+#include <random>
 
 namespace chip8 {
 
@@ -79,9 +80,26 @@ public:
 	constexpr static size_t sprite_height = 5;
 
 	constexpr static size_t num_key = static_cast<size_t>(16);
-	using input_state_t = uint8_t;
-	using input_t = std::array<input_state_t, num_key>;
+	using input_t = uint8_t;
 
+public:
+	cpu() :
+		_ram{},
+		_vram{},
+		_registers{},
+		_index_register(0),
+		_stack{},
+		_stack_pointer(0),
+		_program_counter(0),
+		_current_opcode(0),
+		_delay_timer(0),
+		_sound_timer(0),
+		_inputs{},
+		_random_device{},
+		_random_engine(_random_device()),
+		_rand(0, UINT8_MAX) {}
+
+public:
 	constexpr auto v(size_t index) const { return _registers[index]; }
 	constexpr void v(size_t index, register_t value) { _registers[index] = value; }
 
@@ -114,8 +132,10 @@ public:
 	constexpr void sound_timer(timer_counter_t t) { _sound_timer = t; }
 	constexpr bool sound() const { return sound_timer() > 0; }
 
-	constexpr auto input(size_t k) { return _input[k]; }
-	constexpr auto input(size_t k, input_state_t s) { _input[k] = s; }
+	constexpr auto input(size_t k) { return _inputs[k]; }
+	constexpr auto input(size_t k, input_t s) { _inputs[k] = s; }
+
+	auto random() { return _rand(_random_engine); }
 
 	constexpr auto current_opcode() const { return _current_opcode; }
 
@@ -403,7 +423,7 @@ public:
 		// Set Vx = random byte AND kk.
 		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
 		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
-		const auto rnd = 0; // TODO
+		const auto rnd = random();
 		v(x, rnd & kk);
 	}
 
@@ -423,20 +443,18 @@ public:
 	void op_Ex9E() {
 		// Skip next instruction if key with the value of Vx is pressed.
 		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		if (v(x) & 0) {
+		if (input(v(x)) != 0) {
 			increment_program_counter();
 		}
-		// TODO
 	}
 
 	// SKNP Vx
 	void op_ExA1() {
 		// Skip next instruction if key with the value of Vx is not pressed.
 		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		if (v(x) & 0) {
+		if (input(v(x)) == 0) {
 			increment_program_counter();
 		}
-		// TODO
 	}
 
 	// LD Vx, DT
@@ -537,7 +555,11 @@ private:
 	timer_counter_t _delay_timer;
 	timer_counter_t _sound_timer;
 
-	input_t _input;
+	std::array<input_t, num_key> _inputs;
+
+	std::random_device _random_device;
+	std::default_random_engine _random_engine;
+	std::uniform_int_distribution<> _rand;
 };
 
 template<unsigned Width = 64, unsigned Height = 32, typename PixelType = unsigned int>
