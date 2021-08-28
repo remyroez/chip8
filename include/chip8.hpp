@@ -86,8 +86,27 @@ public:
 
 	constexpr static size_t program_address = 0x200;
 
-	constexpr auto stack_pointer() const { return _stack_pointer; }
+	constexpr auto v(size_t index) const { return _registers[index]; }
+	constexpr void v(size_t index, register_t value) { _registers[index] = value; }
+
 	constexpr auto program_counter() const { return _program_counter; }
+	constexpr void program_counter(program_counter_t pc) { _program_counter = pc; }
+
+	constexpr auto stack() const { return _stack[_stack_pointer]; }
+	constexpr auto stack_pointer() const { return _stack_pointer; }
+	constexpr void push_stack() {
+		if (_stack_pointer < max_stack) {
+			_stack[_stack_pointer] = program_counter();
+			_stack_pointer++;
+		}
+	}
+	constexpr void pop_stack() {
+		if (_stack_pointer > 0) {
+			_program_counter = stack();
+			_stack_pointer--;
+		}
+	}
+
 	constexpr auto current_opcode() const { return _current_opcode; }
 	constexpr auto delay_timer() const { return _delay_timer; }
 	constexpr auto sound_timer() const { return _sound_timer; }
@@ -118,7 +137,17 @@ public:
 		const auto instruction = opcode & 0xF000;
 
 		switch (instruction) {
-		case 0x0000: op_0nnn(); break;
+		case 0x0000:
+		{
+			//op_0nnn();
+			const auto sub_inst = opcode & 0x0FFF;
+			switch (sub_inst) {
+			case 0x00E0: op_00E0(); break;
+			case 0x00EE: op_00EE(); break;
+			default: op_error(); break;
+			}
+			break;
+		}
 		case 0x1000: op_1nnn(); break;
 		case 0x2000: op_2nnn(); break;
 		case 0x3000: op_3xkk(); break;
@@ -178,12 +207,26 @@ public:
 		}
 	}
 
+	// SYS addr
 	void op_0nnn() {
+		// Jump to a machine code routine at nnn.
+		const auto addr = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
+		program_counter(addr);
+	}
 
+	// CLS
+	void op_00E0() {
+		// Clear the display.
+		_vram.clear();
+	}
+
+	// RET
+	void op_00EE() {
+		// Return from a subroutine.
+		pop_stack();
 	}
 
 	void op_1nnn() {
-
 	}
 
 	void op_2nnn() {
