@@ -95,6 +95,8 @@ public:
 	static constexpr size_t opcode_size = sizeof(opcode_t);
 
 	constexpr static size_t program_address = 0x200;
+	constexpr static size_t sprite_width = 8;
+	constexpr static size_t sprite_height = 5;
 
 	constexpr auto v(size_t index) const { return _registers[index]; }
 	constexpr void v(size_t index, register_t value) { _registers[index] = value; }
@@ -121,10 +123,14 @@ public:
 		}
 	}
 
-	constexpr auto current_opcode() const { return _current_opcode; }
 	constexpr auto delay_timer() const { return _delay_timer; }
+	constexpr void delay_timer(timer_counter_t t) { _delay_timer = t; }
+
 	constexpr auto sound_timer() const { return _sound_timer; }
+	constexpr void sound_timer(timer_counter_t t) { _sound_timer = t; }
 	constexpr bool sound() const { return sound_timer() > 0; }
+
+	constexpr auto current_opcode() const { return _current_opcode; }
 
 	constexpr const auto update_opcode() {
 		_current_opcode = 0;
@@ -446,40 +452,75 @@ public:
 		// TODO
 	}
 
+	// LD Vx, DT
 	void op_Fx07() {
-
+		// Set Vx = delay timer value.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		v(x, static_cast<register_t>(delay_timer()));
 	}
 
+	// LD Vx, K
 	void op_Fx0A() {
-
+		// Wait for a key press, store the value of the key in Vx.
+		// TODO
 	}
 
+	// LD DT, Vx
 	void op_Fx15() {
-
+		// Set delay timer = Vx.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		delay_timer(v(x));
 	}
 
+	// LD ST, Vx
 	void op_Fx18() {
-
+		// Set sound timer = Vx.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		sound_timer(v(x));
 	}
 
+	// ADD I, Vx
 	void op_Fx1E() {
-
+		// Set I = I + Vx.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		index_register(index_register() + v(x));
 	}
 
+	// LD F, Vx
 	void op_Fx29() {
-
+		// Set I = location of sprite for digit Vx.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		index_register(v(x) * sprite_height);
 	}
 
+	// LD B, Vx
 	void op_Fx33() {
-
+		// Store BCD representation of Vx in memory locations I, I+1, and I+2.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto b = v(x) / 100 % 10;
+		const auto c = v(x) / 10 % 10;
+		const auto d = v(x) % 10;
+		_ram.write(index_register(), b);
+		_ram.write(index_register() + 1, c);
+		_ram.write(index_register() + 2, d);
 	}
 
+	// LD [I], Vx
 	void op_Fx55() {
-
+		// Store registers V0 through Vx in memory starting at location I.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		for (size_t i = 0; i < x; ++i) {
+			_ram.write(index_register() + i, v(i));
+		}
 	}
 
+	// LD Vx, [I]
 	void op_Fx65() {
-
+		// Read registers V0 through Vx from memory starting at location I.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		for (size_t i = 0; i < x; ++i) {
+			v(i, _ram.read(index_register()));
+		}
 	}
 
 	void op_error() {
