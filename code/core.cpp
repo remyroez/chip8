@@ -14,7 +14,6 @@ class emu {
 public:
     using cpu = chip8::cpu;
     using video = chip8::video<>;
-    using audio = chip8::audio;
 
     static constexpr double fps = 60.f;
     static constexpr double sample_rate = 0.f;
@@ -24,7 +23,6 @@ public:
 private:
     cpu _cpu;
     video _video;
-    audio _audio;
 };
 
 emu s_emu;
