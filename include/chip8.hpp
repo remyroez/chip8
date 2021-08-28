@@ -288,40 +288,84 @@ public:
 		v(x, v(x) + kk);
 	}
 
+	// LD Vx, Vy
 	void op_8xy0() {
-
+		// Set Vx = Vy.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		v(x, v(y));
 	}
 
+	// OR Vx, Vy
 	void op_8xy1() {
-
+		// Set Vx = Vx OR Vy.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		v(x, v(x) | v(y));
 	}
 
+	// AND Vx, Vy
 	void op_8xy2() {
-
+		// Set Vx = Vx AND Vy.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		v(x, v(x) & v(y));
 	}
 
+	// XOR Vx, Vy
 	void op_8xy3() {
-
+		// Set Vx = Vx XOR Vy.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		v(x, v(x) ^ v(y));
 	}
 
+	// ADD Vx, Vy
 	void op_8xy4() {
-
+		// Set Vx = Vx + Vy, set VF = carry.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto sum = static_cast<long long>(v(x)) + static_cast<long long>(v(y));
+		v(x, static_cast<register_t>(sum & 0xFF));
+		v(0xF, (sum > 0xFF) ? 1 : 0);
 	}
 
+	// SUB Vx, Vy
 	void op_8xy5() {
-
+		// Set Vx = Vx - Vy, set VF = NOT borrow.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto sub = static_cast<long long>(v(x)) - static_cast<long long>(v(y));
+		v(0xF, (v(x) > v(y)) ? 1 : 0);
+		v(x, static_cast<register_t>(sub & 0xFF));
 	}
 
+	// SHR Vx {, Vy}
 	void op_8xy6() {
-
+		// Set Vx = Vx SHR 1.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		v(0xF, (v(x) & 0x01) ? 1 : 0);
+		v(x, v(x) >> 1);
 	}
 
+	// SUBN Vx, Vy
 	void op_8xy7() {
-
+		// Set Vx = Vy - Vx, set VF = NOT borrow.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto sub = static_cast<long long>(v(y)) - static_cast<long long>(v(x));
+		v(0xF, (v(y) > v(x)) ? 1 : 0);
+		v(x, static_cast<register_t>(sub & 0xFF));
 	}
 
+	// SHL Vx {, Vy}
 	void op_8xyE() {
-
+		// Set Vx = Vx SHL 1.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		v(0xF, (v(x) & 0x80) ? 1 : 0);
+		v(x, v(x) << 1);
 	}
 
 	void op_9xy0() {
