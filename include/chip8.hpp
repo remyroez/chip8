@@ -6,26 +6,6 @@
 
 namespace chip8 {
 
-enum class key : size_t {
-	key_0,
-	key_1,
-	key_2,
-	key_3,
-	key_4,
-	key_5,
-	key_6,
-	key_7,
-	key_8,
-	key_9,
-	key_a,
-	key_b,
-	key_c,
-	key_d,
-	key_e,
-	key_f,
-	key_num,
-};
-
 template<typename DataType = uint8_t, size_t Size = 4098>
 class memory {
 public:
@@ -75,7 +55,7 @@ private:
 class cpu {
 public:
 	using ram_t = memory<>;
-	using vram_t = memory<uint8_t, 64 * 32>;
+	using vram_t = memory<uint8_t, 64 / 8 * 32>;
 
 	using register_t = uint8_t;
 	static constexpr size_t num_registers = 16;
@@ -97,6 +77,10 @@ public:
 	constexpr static size_t program_address = 0x200;
 	constexpr static size_t sprite_width = 8;
 	constexpr static size_t sprite_height = 5;
+
+	constexpr static size_t num_key = static_cast<size_t>(16);
+	using input_state_t = uint8_t;
+	using input_t = std::array<input_state_t, num_key>;
 
 	constexpr auto v(size_t index) const { return _registers[index]; }
 	constexpr void v(size_t index, register_t value) { _registers[index] = value; }
@@ -129,6 +113,9 @@ public:
 	constexpr auto sound_timer() const { return _sound_timer; }
 	constexpr void sound_timer(timer_counter_t t) { _sound_timer = t; }
 	constexpr bool sound() const { return sound_timer() > 0; }
+
+	constexpr auto input(size_t k) { return _input[k]; }
+	constexpr auto input(size_t k, input_state_t s) { _input[k] = s; }
 
 	constexpr auto current_opcode() const { return _current_opcode; }
 
@@ -462,7 +449,14 @@ public:
 	// LD Vx, K
 	void op_Fx0A() {
 		// Wait for a key press, store the value of the key in Vx.
-		// TODO
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		for (size_t i = 0; i < num_key; ++i) {
+			if (input(i)) {
+				v(x, i);
+				return;
+			}
+		}
+		program_counter(program_counter() - increment_pc);
 	}
 
 	// LD DT, Vx
@@ -542,6 +536,8 @@ private:
 
 	timer_counter_t _delay_timer;
 	timer_counter_t _sound_timer;
+
+	input_t _input;
 };
 
 template<unsigned Width = 64, unsigned Height = 32, typename PixelType = unsigned int>
