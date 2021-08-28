@@ -1,11 +1,13 @@
 #pragma once
 
 #include <array>
+#include <vector>
 #include <limits>
 
 namespace chip8 {
 
 enum class key : size_t {
+	key_0,
 	key_1,
 	key_2,
 	key_3,
@@ -15,7 +17,6 @@ enum class key : size_t {
 	key_7,
 	key_8,
 	key_9,
-	key_0,
 	key_a,
 	key_b,
 	key_c,
@@ -57,6 +58,15 @@ public:
 	}
 
 	constexpr auto read(size_t index) const { return (index < size) ? _data[index] : 0; }
+	constexpr void read(size_t index, data_t *data, size_t data_size) const {
+		const auto end = index + data_size;
+		if (end > size) {
+			memcpy(data, _data.data(), data_size - (end - size));
+
+		} else {
+			memcpy(data, _data.data(), data_size);
+		}
+	}
 
 private:
 	std::array<data_t, size> _data;
@@ -88,6 +98,9 @@ public:
 
 	constexpr auto v(size_t index) const { return _registers[index]; }
 	constexpr void v(size_t index, register_t value) { _registers[index] = value; }
+
+	constexpr auto index_register() const { return _index_register; }
+	constexpr void index_register(index_register_t i) { _index_register = i; }
 
 	constexpr auto program_counter() const { return _program_counter; }
 	constexpr void program_counter(program_counter_t pc) { _program_counter = pc; }
@@ -230,16 +243,16 @@ public:
 	// JP addr
 	void op_1nnn() {
 		// Jump to location nnn.
-		const auto addr = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
-		program_counter(addr);
+		const auto nnn = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
+		program_counter(nnn);
 	}
 
 	// CALL addr
 	void op_2nnn() {
 		// Call subroutine at nnn.
-		const auto addr = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
+		const auto nnn = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
 		push_stack();
-		program_counter(addr);
+		program_counter(nnn);
 	}
 
 	// SE Vx, byte
@@ -368,32 +381,69 @@ public:
 		v(x, v(x) << 1);
 	}
 
+	// SNE Vx, Vy
 	void op_9xy0() {
-
+		// Skip next instruction if Vx != Vy.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		if (v(x) != v(y)) {
+			increment_program_counter();
+		}
 	}
 
+	// LD I, addr
 	void op_Annn() {
-
+		// Set I = nnn.
+		const auto nnn = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
+		index_register(nnn);
 	}
 
+	// JP V0, addr
 	void op_Bnnn() {
-
+		// Jump to location nnn + V0.
+		const auto nnn = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
+		program_counter(nnn + v(0));
 	}
 
+	// RND Vx, byte
 	void op_Cxkk() {
-
+		// Set Vx = random byte AND kk.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
+		const auto rnd = 0; // TODO
+		v(x, rnd & kk);
 	}
 
+	// DRW Vx, Vy, nibble
 	void op_Dxyn() {
-
+		// Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto n = static_cast<size_t>(current_opcode() & 0x000FU);
+		std::vector<vram_t::data_t> reading_data;
+		reading_data.resize(n);
+		_ram.read(index_register(), reading_data.data(), reading_data.size());
+		// TODO
 	}
 
+	// SKP Vx
 	void op_Ex9E() {
-
+		// Skip next instruction if key with the value of Vx is pressed.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		if (v(x) & 0) {
+			increment_program_counter();
+		}
+		// TODO
 	}
 
+	// SKNP Vx
 	void op_ExA1() {
-
+		// Skip next instruction if key with the value of Vx is not pressed.
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		if (v(x) & 0) {
+			increment_program_counter();
+		}
+		// TODO
 	}
 
 	void op_Fx07() {
