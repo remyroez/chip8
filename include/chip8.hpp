@@ -12,6 +12,8 @@ class memory {
 public:
 	using data_t = DataType;
 	static constexpr size_t size = Size;
+	static constexpr data_t data_max = std::numeric_limits<data_t>::max();
+	static constexpr data_t data_bits = std::numeric_limits<data_t>::digits;
 
 	constexpr auto data() const { return _data.data(); }
 
@@ -19,7 +21,7 @@ public:
 		_data.fill(0);
 	}
 
-	constexpr void write(data_t *data, size_t data_size, size_t position = 0) {
+	constexpr void write(const data_t *data, size_t data_size, size_t position = 0) {
 		const auto end = position + data_size;
 		if (end > size) {
 			// over.
@@ -29,12 +31,34 @@ public:
 		}
 	}
 
-	constexpr void write(data_t data, size_t position = 0) {
+	constexpr void write(const data_t &data, size_t position = 0) {
 		if (position > size) {
 			// over.
 
 		} else {
 			_data[position] = data;
+		}
+	}
+
+	constexpr void write_bit(const data_t &data, size_t position, size_t offset = 0) {
+		if (offset == 0) {
+			write(data, position);
+
+		} else {
+			const auto front_mask = (data_max >> offset) & data_max;
+			const auto back_mask = (data_max << (data_bits - offset)) & data_max;
+			const auto data_front = data >> offset & data_max;
+			const auto data_back = data << offset & data_max;
+			if (position > size) {
+				// over.
+
+			} else {
+				const auto before_front = read(position) & ~front_mask;
+				write(before_front | data_front, position);
+
+				const auto before_back = read(position + 1) & ~back_mask;
+				write(before_back | data_back, position + 1);
+			}
 		}
 	}
 
@@ -81,6 +105,7 @@ public:
 	static constexpr size_t opcode_size = sizeof(opcode_t);
 
 	constexpr static size_t program_address = 0x200;
+	constexpr static size_t default_sprite_address = 0x50;
 	constexpr static size_t sprite_width = 8;
 	constexpr static size_t sprite_height = 5;
 
@@ -95,7 +120,7 @@ public:
 		_index_register(0),
 		_stack{},
 		_stack_pointer(0),
-		_program_counter(0),
+		_program_counter(program_address),
 		_current_opcode(0),
 		_delay_timer(0),
 		_sound_timer(0),
@@ -443,17 +468,14 @@ public:
 		_ram.read(index_register(), sprite.data(), sprite.size());
 		// TODO
 		const auto loc_x = v(x);
-		const auto loc_y = v(y);
+		const auto pos = loc_x / sprite_width;
 		const auto ofs = loc_x % sprite_width;
+		const auto loc_y = v(y);
 
 		v(0xF, 0);
 		for (size_t coord_y = 0; coord_y < n; ++coord_y) {
 			const auto pixel = sprite[coord_y];
-			const auto front = (pixel >> ofs) & 0xFF;
-			const auto back = (pixel << (sprite_width - ofs)) & 0xFF;
-			for (size_t coord_x = 0; coord_x < sprite_width; ++coord_x) {
-				
-			}
+			_vram.write_bit(pixel, pos + coord_y * sprite_width, ofs);
 		}
 	}
 
@@ -555,6 +577,58 @@ public:
 
 	void op_error() {
 
+	}
+
+	void clear_ram() { _ram.clear(); }
+
+	void clear_vram() { _vram.clear(); }
+
+	void load_default_sprites() {
+		const ram_t::data_t dataset[] = {
+			0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+			0x20, 0x60, 0x20, 0x20, 0x70, // 1
+			0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+			0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+			0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+			0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+			0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+			0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+			0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+			0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+			0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+			0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+			0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+			0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+			0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+			0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+		};
+		_ram.write(dataset, sizeof(dataset), default_sprite_address);
+	}
+
+	void load_rom(ram_t::data_t *data, size_t data_size) {
+		_ram.write(data, data_size, program_address);
+	}
+
+	void boot() {
+		reset();
+		load_default_sprites();
+	}
+
+	void reset() {
+		clear_ram();
+		clear_vram();
+		_registers = {};
+		_index_register = 0;
+		_stack = {};
+		_stack_pointer = 0;
+		_program_counter = program_address;
+		_current_opcode = 0;
+		_delay_timer = 0;
+		_sound_timer = 0;
+		_inputs = {};
+		//_random_device;
+		//_random_engine;
+		_rand.reset();
 	}
 
 private:
