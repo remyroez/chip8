@@ -56,7 +56,12 @@ private:
 class cpu {
 public:
 	using ram_t = memory<>;
-	using vram_t = memory<uint8_t, 64 / 8 * 32>;
+
+	static constexpr size_t video_width = 64;
+	static constexpr size_t video_height = 32;
+	using video_t = uint8_t;
+	static constexpr size_t video_bit_size = std::numeric_limits<video_t>::digits;
+	using vram_t = memory<video_t, video_width / video_bit_size * video_height>;
 
 	using register_t = uint8_t;
 	static constexpr size_t num_registers = 16;
@@ -237,8 +242,8 @@ public:
 	// SYS addr
 	void op_0nnn() {
 		// Jump to a machine code routine at nnn.
-		const auto addr = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
-		program_counter(addr);
+		const auto nnn = static_cast<program_counter_t>(current_opcode() & 0x0FFFU);
+		program_counter(nnn);
 	}
 
 	// CLS
@@ -271,7 +276,7 @@ public:
 	// SE Vx, byte
 	void op_3xkk() {
 		// Skip next instruction if Vx = kk.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
 		if (v(x) == kk) {
 			increment_program_counter();
@@ -281,7 +286,7 @@ public:
 	// SNE Vx, byte
 	void op_4xkk() {
 		// Skip next instruction if Vx != kk.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
 		if (v(x) != kk) {
 			increment_program_counter();
@@ -291,8 +296,8 @@ public:
 	// SE Vx, Vy
 	void op_5xy0() {
 		// Skip next instruction if Vx = Vy.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		if (v(x) == v(y)) {
 			increment_program_counter();
 		}
@@ -301,7 +306,7 @@ public:
 	// LD Vx, byte
 	void op_6xkk() {
 		// Set Vx = kk.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
 		v(x, kk);
 	}
@@ -309,7 +314,7 @@ public:
 	// ADD Vx, byte
 	void op_7xkk() {
 		// Set Vx = Vx + kk.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
 		v(x, v(x) + kk);
 	}
@@ -317,40 +322,40 @@ public:
 	// LD Vx, Vy
 	void op_8xy0() {
 		// Set Vx = Vy.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		v(x, v(y));
 	}
 
 	// OR Vx, Vy
 	void op_8xy1() {
 		// Set Vx = Vx OR Vy.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		v(x, v(x) | v(y));
 	}
 
 	// AND Vx, Vy
 	void op_8xy2() {
 		// Set Vx = Vx AND Vy.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		v(x, v(x) & v(y));
 	}
 
 	// XOR Vx, Vy
 	void op_8xy3() {
 		// Set Vx = Vx XOR Vy.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		v(x, v(x) ^ v(y));
 	}
 
 	// ADD Vx, Vy
 	void op_8xy4() {
 		// Set Vx = Vx + Vy, set VF = carry.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		const auto sum = static_cast<long long>(v(x)) + static_cast<long long>(v(y));
 		v(x, static_cast<register_t>(sum & 0xFF));
 		v(0xF, (sum > 0xFF) ? 1 : 0);
@@ -359,8 +364,8 @@ public:
 	// SUB Vx, Vy
 	void op_8xy5() {
 		// Set Vx = Vx - Vy, set VF = NOT borrow.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		const auto sub = static_cast<long long>(v(x)) - static_cast<long long>(v(y));
 		v(0xF, (v(x) > v(y)) ? 1 : 0);
 		v(x, static_cast<register_t>(sub & 0xFF));
@@ -369,8 +374,8 @@ public:
 	// SHR Vx {, Vy}
 	void op_8xy6() {
 		// Set Vx = Vx SHR 1.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		v(0xF, (v(x) & 0x01) ? 1 : 0);
 		v(x, v(x) >> 1);
 	}
@@ -378,8 +383,8 @@ public:
 	// SUBN Vx, Vy
 	void op_8xy7() {
 		// Set Vx = Vy - Vx, set VF = NOT borrow.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		const auto sub = static_cast<long long>(v(y)) - static_cast<long long>(v(x));
 		v(0xF, (v(y) > v(x)) ? 1 : 0);
 		v(x, static_cast<register_t>(sub & 0xFF));
@@ -388,8 +393,8 @@ public:
 	// SHL Vx {, Vy}
 	void op_8xyE() {
 		// Set Vx = Vx SHL 1.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		v(0xF, (v(x) & 0x80) ? 1 : 0);
 		v(x, v(x) << 1);
 	}
@@ -397,8 +402,8 @@ public:
 	// SNE Vx, Vy
 	void op_9xy0() {
 		// Skip next instruction if Vx != Vy.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		if (v(x) != v(y)) {
 			increment_program_counter();
 		}
@@ -421,7 +426,7 @@ public:
 	// RND Vx, byte
 	void op_Cxkk() {
 		// Set Vx = random byte AND kk.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		const auto kk = static_cast<register_t>(current_opcode() & 0x00FFU);
 		const auto rnd = random();
 		v(x, rnd & kk);
@@ -430,19 +435,32 @@ public:
 	// DRW Vx, Vy, nibble
 	void op_Dxyn() {
 		// Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
-		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
+		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		const auto n = static_cast<size_t>(current_opcode() & 0x000FU);
-		std::vector<vram_t::data_t> reading_data;
-		reading_data.resize(n);
-		_ram.read(index_register(), reading_data.data(), reading_data.size());
+		std::vector<vram_t::data_t> sprite;
+		sprite.resize(n);
+		_ram.read(index_register(), sprite.data(), sprite.size());
 		// TODO
+		const auto loc_x = v(x);
+		const auto loc_y = v(y);
+		const auto ofs = loc_x % sprite_width;
+
+		v(0xF, 0);
+		for (size_t coord_y = 0; coord_y < n; ++coord_y) {
+			const auto pixel = sprite[coord_y];
+			const auto front = (pixel >> ofs) & 0xFF;
+			const auto back = (pixel << (sprite_width - ofs)) & 0xFF;
+			for (size_t coord_x = 0; coord_x < sprite_width; ++coord_x) {
+				
+			}
+		}
 	}
 
 	// SKP Vx
 	void op_Ex9E() {
 		// Skip next instruction if key with the value of Vx is pressed.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		if (input(v(x)) != 0) {
 			increment_program_counter();
 		}
@@ -451,7 +469,7 @@ public:
 	// SKNP Vx
 	void op_ExA1() {
 		// Skip next instruction if key with the value of Vx is not pressed.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		if (input(v(x)) == 0) {
 			increment_program_counter();
 		}
@@ -460,14 +478,14 @@ public:
 	// LD Vx, DT
 	void op_Fx07() {
 		// Set Vx = delay timer value.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		v(x, static_cast<register_t>(delay_timer()));
 	}
 
 	// LD Vx, K
 	void op_Fx0A() {
 		// Wait for a key press, store the value of the key in Vx.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		for (size_t i = 0; i < num_key; ++i) {
 			if (input(i)) {
 				v(x, i);
@@ -480,35 +498,35 @@ public:
 	// LD DT, Vx
 	void op_Fx15() {
 		// Set delay timer = Vx.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		delay_timer(v(x));
 	}
 
 	// LD ST, Vx
 	void op_Fx18() {
 		// Set sound timer = Vx.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		sound_timer(v(x));
 	}
 
 	// ADD I, Vx
 	void op_Fx1E() {
 		// Set I = I + Vx.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		index_register(index_register() + v(x));
 	}
 
 	// LD F, Vx
 	void op_Fx29() {
 		// Set I = location of sprite for digit Vx.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		index_register(v(x) * sprite_height);
 	}
 
 	// LD B, Vx
 	void op_Fx33() {
 		// Store BCD representation of Vx in memory locations I, I+1, and I+2.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		const auto b = v(x) / 100 % 10;
 		const auto c = v(x) / 10 % 10;
 		const auto d = v(x) % 10;
@@ -520,7 +538,7 @@ public:
 	// LD [I], Vx
 	void op_Fx55() {
 		// Store registers V0 through Vx in memory starting at location I.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		for (size_t i = 0; i < x; ++i) {
 			_ram.write(index_register() + i, v(i));
 		}
@@ -529,7 +547,7 @@ public:
 	// LD Vx, [I]
 	void op_Fx65() {
 		// Read registers V0 through Vx from memory starting at location I.
-		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U);
+		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		for (size_t i = 0; i < x; ++i) {
 			v(i, _ram.read(index_register()));
 		}
