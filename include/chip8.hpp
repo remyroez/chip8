@@ -62,14 +62,14 @@ public:
 		}
 	}
 
-	constexpr auto read(size_t index) const { return (index < size) ? _data[index] : 0; }
+	constexpr auto read(size_t index) const { return (index < size) ? _data[index] : _data[size - 1]; }
 	constexpr void read(size_t index, data_t *data, size_t data_size) const {
 		const auto end = index + data_size;
 		if (end > size) {
-			memcpy(data, _data.data(), data_size - (end - size));
+			memcpy(data, _data.data() + index, data_size - (end - size));
 
 		} else {
-			memcpy(data, _data.data(), data_size);
+			memcpy(data, _data.data() + index, data_size);
 		}
 	}
 
@@ -465,19 +465,32 @@ public:
 		const auto x = static_cast<size_t>(current_opcode() & 0x0F00U) >> 8;
 		const auto y = static_cast<size_t>(current_opcode() & 0x00F0U) >> 4;
 		const auto n = static_cast<size_t>(current_opcode() & 0x000FU);
+
 		std::vector<vram_t::data_t> sprite;
 		sprite.resize(n);
 		_ram.read(index_register(), sprite.data(), sprite.size());
-		// TODO
+		
 		const auto loc_x = v(x);
-		const auto pos = loc_x / sprite_width;
-		const auto ofs = loc_x % sprite_width;
+		const auto ofs = loc_x % video_bit_size;
 		const auto loc_y = v(y);
 
 		v(0xF, 0);
 		for (size_t coord_y = 0; coord_y < n; ++coord_y) {
 			const auto pixel = sprite[coord_y];
-			_vram.write_bit(pixel, pos + coord_y * sprite_width, ofs);
+			const auto pos_y = (loc_y + coord_y) * (video_width / video_bit_size);
+			for (size_t coord_x = 0; coord_x < sprite_width; ++coord_x) {
+				const auto pos_x = (loc_x + ((ofs > 0 ? 1 : 0) - (coord_x + ofs) / video_bit_size)) / video_bit_size;
+				const auto pos = pos_x + pos_y;
+				const auto index = (coord_x + ofs) % video_bit_size;
+				auto chunk = _vram.read(pos);
+				const auto pt = 1 << index;
+				const auto dot = pixel & pt;
+				if ((chunk & dot) != 0) {
+					v(0xF, 1);
+				}
+				chunk ^= dot;
+				_vram.write(chunk, pos);
+			}
 		}
 	}
 

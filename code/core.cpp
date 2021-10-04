@@ -182,9 +182,8 @@ static void render_checkered(void)
 
 static void render_vram(void) {
     uint32_t* buf = s_emu.framebuffer();
-    unsigned stride = emu::video::width;
-    uint32_t color_w = 0xffffffff;
-    uint32_t color_b = 0x00000000;
+    uint32_t color_w = 0xffffff;
+    uint32_t color_b = 0x000000;
     
     constexpr auto vram = s_emu.vram_data();
     constexpr auto vram_size = emu::cpu::vram_t::size;
@@ -194,13 +193,13 @@ static void render_vram(void) {
         for (unsigned x = 0; x < emu::video::width; x++) {
             auto index = x + y * emu::video::width;
             auto vindex = x / bit + y * (emu::video::width / bit);
-            auto sub = x % bit;
+            auto sub = 7 - x % bit;
             auto data = vram[vindex];
             buf[index] = (data & (1 << sub)) ? color_w : color_b;
         }
     }
 
-    video_cb(buf, emu::video::width, emu::video::height, stride << 2);
+    video_cb(buf, emu::video::width, emu::video::height, emu::video::width * sizeof(uint32_t));
 }
 
 static void check_variables(void)
