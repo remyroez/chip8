@@ -20,6 +20,15 @@ public:
 
     auto framebuffer() { return _video.framebuffer(); }
 
+    void boot() { _cpu.boot(); }
+    void reset() { _cpu.reset(); }
+    void cycle() { _cpu.cycle(); }
+
+    using data_t = cpu::ram_t::data_t;
+
+    void load_rom(const data_t *data, size_t size) { _cpu.load_rom(data, size); }
+    constexpr auto vram_data() const { return _cpu.vram_data(); }
+
 private:
     cpu _cpu;
     video _video;
@@ -48,6 +57,7 @@ void fallback_log(enum retro_log_level level, const char* fmt, ...)
 
 void retro_init(void)
 {
+    s_emu.boot();
 }
 
 void retro_deinit(void)
@@ -170,6 +180,29 @@ static void render_checkered(void)
     video_cb(buf, emu::video::width, emu::video::height, stride << 2);
 }
 
+static void render_vram(void) {
+    uint32_t* buf = s_emu.framebuffer();
+    unsigned stride = emu::video::width;
+    uint32_t color_w = 0xffffffff;
+    uint32_t color_b = 0x00000000;
+    
+    constexpr auto vram = s_emu.vram_data();
+    constexpr auto vram_size = emu::cpu::vram_t::size;
+    constexpr auto bit = 8;
+
+    for (unsigned y = 0; y < emu::video::height; y++) {
+        for (unsigned x = 0; x < emu::video::width; x++) {
+            auto index = x + y * emu::video::width;
+            auto vindex = x / bit + y * (emu::video::width / bit);
+            auto sub = x % bit;
+            auto data = vram[vindex];
+            buf[index] = (data & (1 << sub)) ? color_w : color_b;
+        }
+    }
+
+    video_cb(buf, emu::video::width, emu::video::height, stride << 2);
+}
+
 static void check_variables(void)
 {
 }
@@ -182,7 +215,9 @@ static void audio_callback(void)
 void retro_run(void)
 {
     update_input();
-    render_checkered();
+    //render_checkered();
+    s_emu.cycle();
+    render_vram();
     audio_callback();
 
     bool updated = false;
@@ -201,7 +236,8 @@ bool retro_load_game(const struct retro_game_info* info)
 
     check_variables();
 
-    (void)info;
+    s_emu.load_rom(reinterpret_cast<const emu::data_t*>(info->data), info->size);
+
     return true;
 }
 

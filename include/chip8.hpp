@@ -138,7 +138,7 @@ public:
 
 	constexpr auto program_counter() const { return _program_counter; }
 	constexpr void program_counter(program_counter_t pc) { _program_counter = pc; }
-	constexpr void increment_program_counter(program_counter_t n = 0) { program_counter(program_counter() + increment_pc * n); }
+	constexpr void increment_program_counter(program_counter_t n = 1) { program_counter(program_counter() + increment_pc * n); }
 
 	constexpr auto stack() const { return _stack[_stack_pointer]; }
 	constexpr auto stack_pointer() const { return _stack_pointer; }
@@ -172,7 +172,7 @@ public:
 	constexpr const auto update_opcode() {
 		_current_opcode = 0;
 
-		for (size_t i = 0; i << opcode_size; ++i) {
+		for (size_t i = 0; i < opcode_size; ++i) {
 			_current_opcode = _current_opcode << 8;
 			_current_opcode |= _ram.read(program_counter() + i);
 		}
@@ -181,10 +181,12 @@ public:
 	}
 
 	void cycle() {
-		update_opcode();
-		dispatch();
+		if (program_counter() < ram_t::size) {
+			update_opcode();
+			dispatch();
+			increment_program_counter();
+		}
 
-		increment_program_counter();
 		if (_delay_timer > 0) --_delay_timer;
 		if (_sound_timer > 0) --_sound_timer;
 	}
@@ -605,7 +607,7 @@ public:
 		_ram.write(dataset, sizeof(dataset), default_sprite_address);
 	}
 
-	void load_rom(ram_t::data_t *data, size_t data_size) {
+	void load_rom(const ram_t::data_t *data, size_t data_size) {
 		_ram.write(data, data_size, program_address);
 	}
 
@@ -630,6 +632,8 @@ public:
 		//_random_engine;
 		_rand.reset();
 	}
+
+	constexpr auto vram_data() const { return _vram.data(); }
 
 private:
 	ram_t _ram;
